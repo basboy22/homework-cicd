@@ -26,7 +26,7 @@ jobs:
 
       # 4. Run Robot Test
       - name: Run Robot Test
-        run: robot --output output.xml test.robot
+        run: robot --output output.xml hello.robot
 
       # 5. Parse Robot Results
       - name: Parse Robot Results
