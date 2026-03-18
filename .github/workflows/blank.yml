@@ -1,0 +1,71 @@
+name: Robot Framework CI
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  robot-test:
+    runs-on: windows-latest
+
+    steps:
+      # 1. Checkout code
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. Setup Python
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # 3. Install Robot Framework
+      - name: Install Robot Framework
+        run: pip install robotframework
+
+      # 4. Run Robot Test
+      - name: Run Robot Test
+        run: robot --output output.xml test.robot
+
+      # 5. Parse Robot Results
+      - name: Parse Robot Results
+        id: results
+        shell: pwsh
+        run: |
+          [xml]$xml = Get-Content "output.xml"
+          $passed = $xml.robot.statistics.total.stat.pass
+          $failed = $xml.robot.statistics.total.stat.fail
+
+          echo "passed=$passed" >> $env:GITHUB_OUTPUT
+          echo "failed=$failed" >> $env:GITHUB_OUTPUT
+
+      # 6. Send notification to Microsoft Teams
+      - name: Send notification to Teams
+        if: always()
+        shell: pwsh
+        run: |
+          $repo = "${{ github.repository }}"
+          $url = "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          $passed = "${{ steps.results.outputs.passed }}"
+          $failed = "${{ steps.results.outputs.failed }}"
+
+          if ($failed -eq "0") {
+            $status = "✅ PASSED"
+          } else {
+            $status = "❌ FAILED"
+          }
+
+          $message = "🤖 Robot Framework Test Results`n`nRepository: $repo`n`nStatus: $status`nPassed: $passed`nFailed: $failed`n`nWorkflow URL:`n$url"
+
+          Write-Host $message
+
+          $body = @{
+            text = $message
+          } | ConvertTo-Json -Depth 3
+
+          Invoke-RestMethod `
+            -Uri "${{ secrets.TEAMS_WEBHOOK_URL }}" `
+            -Method Post `
+            -Body $body `
+            -ContentType "application/json"
